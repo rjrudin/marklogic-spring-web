@@ -1,0 +1,56 @@
+plugins {
+  id "maven-publish"
+  id "java"
+  id "eclipse"
+  id "com.jfrog.bintray" version "1.5"
+}
+
+sourceCompatibility = 1.7
+targetCompatibility = 1.7
+
+repositories {
+  jcenter()
+}
+
+dependencies {
+  compile "javax.servlet:javax.servlet-api:3.1.0"
+  compile "org.apache.httpcomponents:httpclient:4.5.2"
+  compile "org.slf4j:jcl-over-slf4j:1.7.12"
+  compile "org.springframework.security:spring-security-web:4.0.4.RELEASE"
+  compile "org.springframework:spring-web:4.2.5.RELEASE"
+}
+
+task sourcesJar(type: Jar, dependsOn: classes) {
+  classifier 'sources' 
+  from sourceSets.main.allJava
+}
+
+publishing {
+  publications {
+    mainJava(MavenPublication) {
+      from components.java
+    }
+    sourcesJava(MavenPublication) {
+      from components.java
+      artifact sourcesJar
+    }
+  }
+}
+ 
+if (project.hasProperty("myBintrayUser")) {
+  bintray {
+    user = myBintrayUser
+    key = myBintrayKey
+    publications = ['mainJava', 'sourcesJava']
+    pkg {
+      repo = 'maven'
+      name = project.name
+      licenses = ['Apache-2.0']
+      vcsUrl = 'https://github.com/rjrudin/' + project.name + '.git'
+      version {
+        name = "0.1"
+        released = new Date()
+      }
+    }
+  }
+}
