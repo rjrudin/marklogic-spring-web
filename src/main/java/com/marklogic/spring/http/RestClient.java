@@ -1,5 +1,6 @@
 package com.marklogic.spring.http;
 
+import java.io.UnsupportedEncodingException;
 import java.net.URI;
 import java.net.URLDecoder;
 
@@ -24,6 +25,9 @@ public class RestClient {
     private RestConfig restConfig;
     private RestOperations restOperations;
 
+    private boolean decodeQuerystring = true;
+    private String encoding = "UTF-8";
+
     public RestClient(RestConfig restConfig, CredentialsProvider credentialsProvider) {
         this.restConfig = restConfig;
         this.restOperations = newRestTemplate(credentialsProvider);
@@ -41,11 +45,21 @@ public class RestClient {
              * already, such as for a structured query for a /v1/search request. The text is then decoded here, and then
              * encoded by the URI class, which ensures that we don't double-encode the QS.
              */
-            queryString = URLDecoder.decode(queryString, "UTF-8");
+            if (isDecodeQuerystring()) {
+                queryString = decode(queryString);
+            }
             return new URI(restConfig.getScheme(), null, restConfig.getHost(), restConfig.getRestPort(), path,
                     queryString, null);
         } catch (Exception ex) {
             throw new RuntimeException("Unable to build URI, cause: " + ex.getMessage(), ex);
+        }
+    }
+
+    protected String decode(String queryString) {
+        try {
+            return queryString != null ? URLDecoder.decode(queryString, "UTF-8") : null;
+        } catch (UnsupportedEncodingException ex) {
+            throw new RuntimeException("Unable to decode queryString, cause: " + ex.getMessage(), ex);
         }
     }
 
@@ -56,5 +70,21 @@ public class RestClient {
 
     public RestOperations getRestOperations() {
         return restOperations;
+    }
+
+    public boolean isDecodeQuerystring() {
+        return decodeQuerystring;
+    }
+
+    public void setDecodeQuerystring(boolean decodeQuerystring) {
+        this.decodeQuerystring = decodeQuerystring;
+    }
+
+    public String getEncoding() {
+        return encoding;
+    }
+
+    public void setEncoding(String encoding) {
+        this.encoding = encoding;
     }
 }

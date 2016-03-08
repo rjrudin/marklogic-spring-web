@@ -3,6 +3,8 @@ package com.marklogic.spring.web.servlet.mvc;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -21,6 +23,8 @@ import com.marklogic.spring.http.proxy.HttpProxy;
  * request handlers, and thus the Controller annotation can be added to the subclass.
  */
 public class SlushUiController {
+
+    protected Logger logger = LoggerFactory.getLogger(getClass());
 
     @Autowired
     private HttpProxy httpProxy;
