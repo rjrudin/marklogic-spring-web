@@ -5,3 +5,4 @@ build/
 .gradle
 .settings
 .idea
+*.iml
