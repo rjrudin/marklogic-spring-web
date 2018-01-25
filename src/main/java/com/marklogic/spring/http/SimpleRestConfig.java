@@ -54,12 +54,12 @@ public class SimpleRestConfig implements RestConfig {
         this.scheme = scheme;
     }
 
-	public String getRealm() {
-		return realm;
-	}
+    public String getRealm() {
+        return realm;
+    }
 
-	public void setRealm(String realm) {
-		this.realm = realm;
-	}
+    public void setRealm(String realm) {
+        this.realm = realm;
+    }
 
 }

@@ -12,36 +12,36 @@ import java.util.Collection;
  * used to prevent any erasing from occurring.
  */
 public class MarkLogicUsernamePasswordAuthentication extends UsernamePasswordAuthenticationToken {
-	private static final long serialVersionUID = 1L;
-	private RestOperations operations;
-	
-	public MarkLogicUsernamePasswordAuthentication(Object principal, Object credentials) {
-		super(principal, credentials);
-	}
+    private static final long serialVersionUID = 1L;
+    private RestOperations operations;
+    
+    public MarkLogicUsernamePasswordAuthentication(Object principal, Object credentials) {
+        super(principal, credentials);
+    }
 
-	public MarkLogicUsernamePasswordAuthentication(Object principal, Object credentials, Collection<? extends GrantedAuthority> authorities) {
-		super(principal, credentials, authorities);
-	}
-	
-	public MarkLogicUsernamePasswordAuthentication(Object principal, Object credentials, RestOperations operations) {
-		super(principal, credentials);
-		this.operations = operations;
-	}
-	
-	public MarkLogicUsernamePasswordAuthentication(Object principal, Object credentials, Collection<? extends GrantedAuthority> authorities, RestOperations operations) {
-		super(principal, credentials, authorities);
-		this.operations = operations;
-	}
+    public MarkLogicUsernamePasswordAuthentication(Object principal, Object credentials, Collection<? extends GrantedAuthority> authorities) {
+        super(principal, credentials, authorities);
+    }
+    
+    public MarkLogicUsernamePasswordAuthentication(Object principal, Object credentials, RestOperations operations) {
+        super(principal, credentials);
+        this.operations = operations;
+    }
+    
+    public MarkLogicUsernamePasswordAuthentication(Object principal, Object credentials, Collection<? extends GrantedAuthority> authorities, RestOperations operations) {
+        super(principal, credentials, authorities);
+        this.operations = operations;
+    }
 
-	@Override
-	public void eraseCredentials() {
-	}
+    @Override
+    public void eraseCredentials() {
+    }
 
-	public RestOperations getOperations() {
-		return operations;
-	}
-	
-	public void clearOperations() {
-		this.operations = null;
-	}
+    public RestOperations getOperations() {
+        return operations;
+    }
+    
+    public void clearOperations() {
+        this.operations = null;
+    }
 }

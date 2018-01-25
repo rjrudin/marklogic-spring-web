@@ -37,103 +37,103 @@ import java.net.URI;
  */
 public class MarkLogicAuthenticationManager implements AuthenticationProvider, AuthenticationManager {
 
-	private RestConfig restConfig;
+    private RestConfig restConfig;
 
-	private String pathToAuthenticateAgainst = "/";
+    private String pathToAuthenticateAgainst = "/";
 
-	/**
-	 * A RestConfig instance is needed so a request can be made to MarkLogic to see if the user can successfully
-	 * authenticate.
-	 *
-	 * @param restConfig
-	 */
-	public MarkLogicAuthenticationManager(RestConfig restConfig) {
-		this.restConfig = restConfig;
-	}
+    /**
+     * A RestConfig instance is needed so a request can be made to MarkLogic to see if the user can successfully
+     * authenticate.
+     *
+     * @param restConfig
+     */
+    public MarkLogicAuthenticationManager(RestConfig restConfig) {
+        this.restConfig = restConfig;
+    }
 
-	@Override
-	public boolean supports(Class<?> authentication) {
-		return UsernamePasswordAuthenticationToken.class.isAssignableFrom(authentication);
-	}
+    @Override
+    public boolean supports(Class<?> authentication) {
+        return UsernamePasswordAuthenticationToken.class.isAssignableFrom(authentication);
+    }
 
-	@Override
-	public Authentication authenticate(Authentication authentication) throws AuthenticationException {
-		if (!(authentication instanceof UsernamePasswordAuthenticationToken)) {
-			throw new IllegalArgumentException(
-				getClass().getName() + " only supports " + UsernamePasswordAuthenticationToken.class.getName());
-		}
+    @Override
+    public Authentication authenticate(Authentication authentication) throws AuthenticationException {
+        if (!(authentication instanceof UsernamePasswordAuthenticationToken)) {
+            throw new IllegalArgumentException(
+                getClass().getName() + " only supports " + UsernamePasswordAuthenticationToken.class.getName());
+        }
 
-		UsernamePasswordAuthenticationToken token = (UsernamePasswordAuthenticationToken) authentication;
-		String username = token.getPrincipal().toString();
-		String password = token.getCredentials().toString();
+        UsernamePasswordAuthenticationToken token = (UsernamePasswordAuthenticationToken) authentication;
+        String username = token.getPrincipal().toString();
+        String password = token.getCredentials().toString();
 
-		/**
-		 * For now, building a new RestTemplate each time. This should in general be okay, because we're typically not
-		 * authenticating users over and over.
-		 */
-		RestClient client = new RestClient(restConfig
-				, prepareRestTemplate(new SimpleCredentialsProvider(username, password))
-			);
-		URI uri = client.buildUri(pathToAuthenticateAgainst, "");
-		try {
-			client.getRestOperations().getForEntity(uri, String.class);
-		} catch (HttpClientErrorException ex) {
-			if (HttpStatus.NOT_FOUND.equals(ex.getStatusCode())) {
-				// Authenticated, but the path wasn't found - that's okay, we just needed to verify authentication
-			} else if (HttpStatus.UNAUTHORIZED.equals(ex.getStatusCode())) {
-				throw new BadCredentialsException("Invalid credentials");
-			} else {
-				throw ex;
-			}
-		}
+        /**
+         * For now, building a new RestTemplate each time. This should in general be okay, because we're typically not
+         * authenticating users over and over.
+         */
+        RestClient client = new RestClient(restConfig
+                , prepareRestTemplate(new SimpleCredentialsProvider(username, password))
+            );
+        URI uri = client.buildUri(pathToAuthenticateAgainst, "");
+        try {
+            client.getRestOperations().getForEntity(uri, String.class);
+        } catch (HttpClientErrorException ex) {
+            if (HttpStatus.NOT_FOUND.equals(ex.getStatusCode())) {
+                // Authenticated, but the path wasn't found - that's okay, we just needed to verify authentication
+            } else if (HttpStatus.UNAUTHORIZED.equals(ex.getStatusCode())) {
+                throw new BadCredentialsException("Invalid credentials");
+            } else {
+                throw ex;
+            }
+        }
 
-		return buildAuthenticationToReturn(token, client.getRestOperations());
-	}
+        return buildAuthenticationToReturn(token, client.getRestOperations());
+    }
 
-	/**
-	 * See the comments on MarkLogicUsernamePasswordAuthentication to understand why an instance of that class is
-	 * returned.
-	 *
-	 * @param token
-	 * @return
-	 */
-	protected Authentication buildAuthenticationToReturn(UsernamePasswordAuthenticationToken token, RestOperations operation) {
-		return new MarkLogicUsernamePasswordAuthentication(token.getPrincipal(), token.getCredentials(),
-			token.getAuthorities(), operation);
-	}
+    /**
+     * See the comments on MarkLogicUsernamePasswordAuthentication to understand why an instance of that class is
+     * returned.
+     *
+     * @param token
+     * @return
+     */
+    protected Authentication buildAuthenticationToReturn(UsernamePasswordAuthenticationToken token, RestOperations operation) {
+        return new MarkLogicUsernamePasswordAuthentication(token.getPrincipal(), token.getCredentials(),
+            token.getAuthorities(), operation);
+    }
 
-	public void setPathToAuthenticateAgainst(String pathToAuthenticateAgainst) {
-		this.pathToAuthenticateAgainst = pathToAuthenticateAgainst;
-	}
-	
-	private RestTemplate prepareRestTemplate(SimpleCredentialsProvider provider) {
-		final CloseableHttpClient httpClient =
-				HttpClientBuilder
-					.create()
-					.setDefaultCredentialsProvider(provider)
-					.useSystemProperties()
-					.build();
-		final HttpHost host = new HttpHost(restConfig.getHost(), restConfig.getRestPort(), restConfig.getScheme());
-		// Create AuthCache instance
-		final AuthCache authCache = new BasicAuthCache();
-		// Generate DIGEST scheme object, initialize it and add it to the local digest cache
-		final DigestScheme digestAuth = new DigestScheme();
-		digestAuth.overrideParamter("realm", restConfig.getRealm());
-		authCache.put(host, digestAuth);
+    public void setPathToAuthenticateAgainst(String pathToAuthenticateAgainst) {
+        this.pathToAuthenticateAgainst = pathToAuthenticateAgainst;
+    }
+    
+    private RestTemplate prepareRestTemplate(SimpleCredentialsProvider provider) {
+        final CloseableHttpClient httpClient =
+                HttpClientBuilder
+                    .create()
+                    .setDefaultCredentialsProvider(provider)
+                    .useSystemProperties()
+                    .build();
+        final HttpHost host = new HttpHost(restConfig.getHost(), restConfig.getRestPort(), restConfig.getScheme());
+        // Create AuthCache instance
+        final AuthCache authCache = new BasicAuthCache();
+        // Generate DIGEST scheme object, initialize it and add it to the local digest cache
+        final DigestScheme digestAuth = new DigestScheme();
+        digestAuth.overrideParamter("realm", restConfig.getRealm());
+        authCache.put(host, digestAuth);
 
-		// create a RestTemplate wired with a custom request factory using the above AuthCache with Digest Scheme
-		RestTemplate restTemplate = new RestTemplate(new HttpComponentsClientHttpRequestFactory(httpClient){
-			@Override
-			protected HttpContext createHttpContext(HttpMethod httpMethod, URI uri) {
-				// Add AuthCache to the execution context
-				BasicHttpContext localcontext = new BasicHttpContext();
-				localcontext.setAttribute(HttpClientContext.AUTH_CACHE, authCache);
-				return localcontext;
-			}
-		});
+        // create a RestTemplate wired with a custom request factory using the above AuthCache with Digest Scheme
+        RestTemplate restTemplate = new RestTemplate(new HttpComponentsClientHttpRequestFactory(httpClient){
+            @Override
+            protected HttpContext createHttpContext(HttpMethod httpMethod, URI uri) {
+                // Add AuthCache to the execution context
+                BasicHttpContext localcontext = new BasicHttpContext();
+                localcontext.setAttribute(HttpClientContext.AUTH_CACHE, authCache);
+                return localcontext;
+            }
+        });
 
-		return restTemplate;
-	}
+        return restTemplate;
+    }
 }
 
 /**
@@ -141,25 +141,25 @@ public class MarkLogicAuthenticationManager implements AuthenticationProvider, A
  */
 class SimpleCredentialsProvider implements CredentialsProvider {
 
-	private String username;
-	private String password;
+    private String username;
+    private String password;
 
-	public SimpleCredentialsProvider(String username, String password) {
-		this.username = username;
-		this.password = password;
-	}
+    public SimpleCredentialsProvider(String username, String password) {
+        this.username = username;
+        this.password = password;
+    }
 
-	@Override
-	public void setCredentials(AuthScope authscope, Credentials credentials) {
-	}
+    @Override
+    public void setCredentials(AuthScope authscope, Credentials credentials) {
+    }
 
-	@Override
-	public Credentials getCredentials(AuthScope authscope) {
-		return new UsernamePasswordCredentials(username, password);
-	}
+    @Override
+    public Credentials getCredentials(AuthScope authscope) {
+        return new UsernamePasswordCredentials(username, password);
+    }
 
-	@Override
-	public void clear() {
-	}
+    @Override
+    public void clear() {
+    }
 
 }
