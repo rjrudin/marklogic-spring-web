@@ -16,6 +16,9 @@ public class SimpleRestConfig implements RestConfig {
     @Value("${mlRestPort:8000}")
     private Integer restPort;
 
+    @Value("${mlRealm:public}")
+    private String realm;
+    
     private String scheme = "http";
 
     public SimpleRestConfig() {
@@ -50,5 +53,13 @@ public class SimpleRestConfig implements RestConfig {
     public void setScheme(String scheme) {
         this.scheme = scheme;
     }
+
+	public String getRealm() {
+		return realm;
+	}
+
+	public void setRealm(String realm) {
+		this.realm = realm;
+	}
 
 }
