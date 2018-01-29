@@ -4,7 +4,6 @@ import java.net.URI;
 
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
-import javax.servlet.http.HttpSession;
 
 import org.apache.http.client.CredentialsProvider;
 import org.apache.http.client.HttpClient;
@@ -12,6 +11,7 @@ import org.apache.http.impl.client.HttpClientBuilder;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.client.HttpComponentsClientHttpRequestFactory;
 import org.springframework.security.authentication.CredentialsExpiredException;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.web.authentication.session.SessionAuthenticationException;
 import org.springframework.web.client.RequestCallback;
@@ -27,7 +27,7 @@ import com.marklogic.spring.security.authentication.MarkLogicUsernamePasswordAut
  * Simple proxy class that uses Spring's RestOperations to proxy servlet requests to MarkLogic.
  */
 public class HttpProxy extends RestClient {
-    public static final String RESTTEMPLATE_SESSION_KEY = "upstream.restemplate";
+    public static final String RESTTEMPLATE_KEY = "com.marklogic.spring.http.proxy.RestTemplate";
 
     public HttpProxy(RestConfig restConfig, CredentialsProvider provider) {
         super(restConfig, provider);
@@ -97,45 +97,30 @@ public class HttpProxy extends RestClient {
             logger.debug(String.format("Proxying to URI: %s", uri));
         }
         HttpMethod method = determineMethod(httpRequest);
-        RestOperations client = getSessionRestTemplate(httpRequest);
-        return client.execute(uri, method, requestCallback, responseExtractor);
+        return getRestOperations().execute(uri, method, requestCallback, responseExtractor);
     }
 
     protected HttpMethod determineMethod(HttpServletRequest request) {
         return HttpMethod.valueOf(request.getMethod());
     }
     
-    private RestOperations getSessionRestTemplate(HttpServletRequest httpRequest) {
-        HttpSession downstreamSession = httpRequest.getSession();
-        if (downstreamSession == null) {
-            //this shouldn't happen.
-            return null;
+    @Override
+    public RestOperations getRestOperations() {
+        // credentials provider....
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null) {
+            throw new CredentialsExpiredException("Missing security context.");
         }
-
-        synchronized (downstreamSession) {
-            RestOperations template = (RestTemplate) downstreamSession.getAttribute(RESTTEMPLATE_SESSION_KEY);
-            if (template != null) {
-                return template;
-            }
-            // credentials provider....
-            MarkLogicUsernamePasswordAuthentication auth = (MarkLogicUsernamePasswordAuthentication) 
-                    SecurityContextHolder.getContext().getAuthentication();
-            if (auth == null) {
-                throw new CredentialsExpiredException("Missing security context.");
-            }
-            // get the linked RestTemplate stored by
-            // DigestAuthenticationManager in the token
-            template = auth.getOperations();
-            if (template == null) {
-                throw new SessionAuthenticationException("User not logged in.");
-            }
-            // move the template from the upstream to the downstream session
-            downstreamSession.setAttribute(RESTTEMPLATE_SESSION_KEY, template);
-            // it's already in the user session, remove from context
-            // for further safety
-            auth.clearOperations();
-            
-            return template;
+        
+        if (!(auth instanceof MarkLogicUsernamePasswordAuthentication)) {
+            return super.getRestOperations();
         }
+        
+        MarkLogicUsernamePasswordAuthentication token = (MarkLogicUsernamePasswordAuthentication) auth;
+        RestOperations template = token.getOperations();
+        if (template == null) {
+            throw new SessionAuthenticationException("User not logged in.");
+        }
+        return template;
     }
 }

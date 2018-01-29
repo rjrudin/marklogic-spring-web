@@ -7,6 +7,4 @@ public interface RestConfig {
     public Integer getRestPort();
 
     public String getScheme();
-    
-    public String getRealm();
 }

@@ -1,5 +1,6 @@
 package com.marklogic.spring.security.authentication;
 
+import com.marklogic.spring.http.AuthenticationHeader;
 import com.marklogic.spring.http.RestClient;
 import com.marklogic.spring.http.RestConfig;
 import org.apache.http.HttpHost;
@@ -62,21 +63,29 @@ public class MarkLogicAuthenticationManager implements AuthenticationProvider, A
             throw new IllegalArgumentException(
                 getClass().getName() + " only supports " + UsernamePasswordAuthenticationToken.class.getName());
         }
-
+        
         UsernamePasswordAuthenticationToken token = (UsernamePasswordAuthenticationToken) authentication;
         String username = token.getPrincipal().toString();
         String password = token.getCredentials().toString();
-
+        RestClient client = null;
         /**
          * For now, building a new RestTemplate each time. This should in general be okay, because we're typically not
          * authenticating users over and over.
          */
-        RestClient client = new RestClient(restConfig
-                , prepareRestTemplate(new SimpleCredentialsProvider(username, password))
-            );
+        AuthenticationHeader challenge = AuthenticationHeader.getOption(restConfig);
+        if ("digest".equalsIgnoreCase(challenge.getType())) {
+            client = new RestClient(restConfig
+                    , prepareDigestTemplate(new SimpleCredentialsProvider(username, password), challenge.getRealm())
+                );
+        } else {
+            client = new RestClient(restConfig
+                    , new SimpleCredentialsProvider(username, password)
+                );
+        }
+        
         URI uri = client.buildUri(pathToAuthenticateAgainst, "");
         try {
-            client.getRestOperations().getForEntity(uri, String.class);
+            client.getRestOperations().headForHeaders(uri);
         } catch (HttpClientErrorException ex) {
             if (HttpStatus.NOT_FOUND.equals(ex.getStatusCode())) {
                 // Authenticated, but the path wasn't found - that's okay, we just needed to verify authentication
@@ -89,7 +98,7 @@ public class MarkLogicAuthenticationManager implements AuthenticationProvider, A
 
         return buildAuthenticationToReturn(token, client.getRestOperations());
     }
-
+    
     /**
      * See the comments on MarkLogicUsernamePasswordAuthentication to understand why an instance of that class is
      * returned.
@@ -106,7 +115,7 @@ public class MarkLogicAuthenticationManager implements AuthenticationProvider, A
         this.pathToAuthenticateAgainst = pathToAuthenticateAgainst;
     }
     
-    private RestTemplate prepareRestTemplate(SimpleCredentialsProvider provider) {
+    protected RestTemplate prepareDigestTemplate(SimpleCredentialsProvider provider, String realm) {
         final CloseableHttpClient httpClient =
                 HttpClientBuilder
                     .create()
@@ -114,13 +123,14 @@ public class MarkLogicAuthenticationManager implements AuthenticationProvider, A
                     .useSystemProperties()
                     .build();
         final HttpHost host = new HttpHost(restConfig.getHost(), restConfig.getRestPort(), restConfig.getScheme());
+        
         // Create AuthCache instance
         final AuthCache authCache = new BasicAuthCache();
-        // Generate DIGEST scheme object, initialize it and add it to the local digest cache
+        
         final DigestScheme digestAuth = new DigestScheme();
-        digestAuth.overrideParamter("realm", restConfig.getRealm());
+        digestAuth.overrideParamter("realm", realm);
         authCache.put(host, digestAuth);
-
+        
         // create a RestTemplate wired with a custom request factory using the above AuthCache with Digest Scheme
         RestTemplate restTemplate = new RestTemplate(new HttpComponentsClientHttpRequestFactory(httpClient){
             @Override
@@ -161,5 +171,4 @@ class SimpleCredentialsProvider implements CredentialsProvider {
     @Override
     public void clear() {
     }
-
 }
