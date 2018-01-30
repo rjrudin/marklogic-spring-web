@@ -30,7 +30,8 @@ import com.marklogic.spring.http.RestConfig;
  * Simple proxy class that uses Spring's RestOperations to proxy servlet requests to MarkLogic.
  */
 public class HttpProxy extends RestClient {
-    public HttpProxy(RestConfig restConfig, CredentialsProvider provider) {
+
+	public HttpProxy(RestConfig restConfig, CredentialsProvider provider) {
         super(restConfig, provider);
     }
 
@@ -39,16 +40,16 @@ public class HttpProxy extends RestClient {
     }
 
     @Override
-	protected RestTemplate newRestTemplate(CredentialsProvider provider) {
-    	AuthenticationHeader challenge = AuthenticationHeader.getOption(getRestConfig());
-    	RestTemplate result = null;
-		if ("digest".equalsIgnoreCase(challenge.getType()) && getRestConfig().getCacheDigest()) {
-			result = prepareDigestTemplate(provider, challenge.getRealm());
-		} else {
-			result = super.newRestTemplate(provider);
-		}
-		return result;
-	}
+    protected RestTemplate newRestTemplate(CredentialsProvider provider) {
+        AuthenticationHeader challenge = AuthenticationHeader.getOption(getRestConfig());
+        RestTemplate result = null;
+        if ("digest".equalsIgnoreCase(challenge.getType()) && getRestConfig().getCacheDigest()) {
+            result = prepareDigestTemplate(provider, challenge.getRealm());
+        } else {
+            result = super.newRestTemplate(provider);
+        }
+        return result;
+    }
     
     /**
      * Proxy a request without copying any headers.
