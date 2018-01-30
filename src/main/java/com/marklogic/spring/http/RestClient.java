@@ -23,7 +23,8 @@ public class RestClient {
     protected Logger logger = LoggerFactory.getLogger(getClass());
 
     private RestConfig restConfig;
-    private RestOperations restOperations;
+
+	private RestOperations restOperations;
 
     private boolean decodeQuerystring = true;
     private String encoding = "UTF-8";
@@ -87,4 +88,8 @@ public class RestClient {
     public void setEncoding(String encoding) {
         this.encoding = encoding;
     }
+    
+    public RestConfig getRestConfig() {
+		return restConfig;
+	}
 }

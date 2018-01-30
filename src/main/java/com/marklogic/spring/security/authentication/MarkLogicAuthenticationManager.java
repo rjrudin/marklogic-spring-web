@@ -1,24 +1,12 @@
 package com.marklogic.spring.security.authentication;
 
-import com.marklogic.spring.http.AuthenticationHeader;
 import com.marklogic.spring.http.RestClient;
 import com.marklogic.spring.http.RestConfig;
-import org.apache.http.HttpHost;
 import org.apache.http.auth.AuthScope;
 import org.apache.http.auth.Credentials;
 import org.apache.http.auth.UsernamePasswordCredentials;
-import org.apache.http.client.AuthCache;
 import org.apache.http.client.CredentialsProvider;
-import org.apache.http.client.protocol.HttpClientContext;
-import org.apache.http.impl.auth.DigestScheme;
-import org.apache.http.impl.client.BasicAuthCache;
-import org.apache.http.impl.client.CloseableHttpClient;
-import org.apache.http.impl.client.HttpClientBuilder;
-import org.apache.http.protocol.BasicHttpContext;
-import org.apache.http.protocol.HttpContext;
-import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.client.HttpComponentsClientHttpRequestFactory;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.AuthenticationProvider;
 import org.springframework.security.authentication.BadCredentialsException;
@@ -26,8 +14,6 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.web.client.HttpClientErrorException;
-import org.springframework.web.client.RestOperations;
-import org.springframework.web.client.RestTemplate;
 
 import java.net.URI;
 
@@ -38,112 +24,72 @@ import java.net.URI;
  */
 public class MarkLogicAuthenticationManager implements AuthenticationProvider, AuthenticationManager {
 
-    private RestConfig restConfig;
+	private RestConfig restConfig;
 
-    private String pathToAuthenticateAgainst = "/";
+	private String pathToAuthenticateAgainst = "/";
 
-    /**
-     * A RestConfig instance is needed so a request can be made to MarkLogic to see if the user can successfully
-     * authenticate.
-     *
-     * @param restConfig
-     */
-    public MarkLogicAuthenticationManager(RestConfig restConfig) {
-        this.restConfig = restConfig;
-    }
+	/**
+	 * A RestConfig instance is needed so a request can be made to MarkLogic to see if the user can successfully
+	 * authenticate.
+	 *
+	 * @param restConfig
+	 */
+	public MarkLogicAuthenticationManager(RestConfig restConfig) {
+		this.restConfig = restConfig;
+	}
 
-    @Override
-    public boolean supports(Class<?> authentication) {
-        return UsernamePasswordAuthenticationToken.class.isAssignableFrom(authentication);
-    }
+	@Override
+	public boolean supports(Class<?> authentication) {
+		return UsernamePasswordAuthenticationToken.class.isAssignableFrom(authentication);
+	}
 
-    @Override
-    public Authentication authenticate(Authentication authentication) throws AuthenticationException {
-        if (!(authentication instanceof UsernamePasswordAuthenticationToken)) {
-            throw new IllegalArgumentException(
-                getClass().getName() + " only supports " + UsernamePasswordAuthenticationToken.class.getName());
-        }
-        
-        UsernamePasswordAuthenticationToken token = (UsernamePasswordAuthenticationToken) authentication;
-        String username = token.getPrincipal().toString();
-        String password = token.getCredentials().toString();
-        RestClient client = null;
-        /**
-         * For now, building a new RestTemplate each time. This should in general be okay, because we're typically not
-         * authenticating users over and over.
-         */
-        AuthenticationHeader challenge = AuthenticationHeader.getOption(restConfig);
-        if ("digest".equalsIgnoreCase(challenge.getType())) {
-            client = new RestClient(restConfig
-                    , prepareDigestTemplate(new SimpleCredentialsProvider(username, password), challenge.getRealm())
-                );
-        } else {
-            client = new RestClient(restConfig
-                    , new SimpleCredentialsProvider(username, password)
-                );
-        }
-        
-        URI uri = client.buildUri(pathToAuthenticateAgainst, "");
-        try {
-            client.getRestOperations().headForHeaders(uri);
-        } catch (HttpClientErrorException ex) {
-            if (HttpStatus.NOT_FOUND.equals(ex.getStatusCode())) {
-                // Authenticated, but the path wasn't found - that's okay, we just needed to verify authentication
-            } else if (HttpStatus.UNAUTHORIZED.equals(ex.getStatusCode())) {
-                throw new BadCredentialsException("Invalid credentials");
-            } else {
-                throw ex;
-            }
-        }
+	@Override
+	public Authentication authenticate(Authentication authentication) throws AuthenticationException {
+		if (!(authentication instanceof UsernamePasswordAuthenticationToken)) {
+			throw new IllegalArgumentException(
+				getClass().getName() + " only supports " + UsernamePasswordAuthenticationToken.class.getName());
+		}
 
-        return buildAuthenticationToReturn(token, client.getRestOperations());
-    }
-    
-    /**
-     * See the comments on MarkLogicUsernamePasswordAuthentication to understand why an instance of that class is
-     * returned.
-     *
-     * @param token
-     * @return
-     */
-    protected Authentication buildAuthenticationToReturn(UsernamePasswordAuthenticationToken token, RestOperations operation) {
-        return new MarkLogicUsernamePasswordAuthentication(token.getPrincipal(), token.getCredentials(),
-            token.getAuthorities(), operation);
-    }
+		UsernamePasswordAuthenticationToken token = (UsernamePasswordAuthenticationToken) authentication;
+		String username = token.getPrincipal().toString();
+		String password = token.getCredentials().toString();
 
-    public void setPathToAuthenticateAgainst(String pathToAuthenticateAgainst) {
-        this.pathToAuthenticateAgainst = pathToAuthenticateAgainst;
-    }
-    
-    protected RestTemplate prepareDigestTemplate(SimpleCredentialsProvider provider, String realm) {
-        final CloseableHttpClient httpClient =
-                HttpClientBuilder
-                    .create()
-                    .setDefaultCredentialsProvider(provider)
-                    .useSystemProperties()
-                    .build();
-        final HttpHost host = new HttpHost(restConfig.getHost(), restConfig.getRestPort(), restConfig.getScheme());
-        
-        // Create AuthCache instance
-        final AuthCache authCache = new BasicAuthCache();
-        
-        final DigestScheme digestAuth = new DigestScheme();
-        digestAuth.overrideParamter("realm", realm);
-        authCache.put(host, digestAuth);
-        
-        // create a RestTemplate wired with a custom request factory using the above AuthCache with Digest Scheme
-        RestTemplate restTemplate = new RestTemplate(new HttpComponentsClientHttpRequestFactory(httpClient){
-            @Override
-            protected HttpContext createHttpContext(HttpMethod httpMethod, URI uri) {
-                // Add AuthCache to the execution context
-                BasicHttpContext localcontext = new BasicHttpContext();
-                localcontext.setAttribute(HttpClientContext.AUTH_CACHE, authCache);
-                return localcontext;
-            }
-        });
+		/**
+		 * For now, building a new RestTemplate each time. This should in general be okay, because we're typically not
+		 * authenticating users over and over.
+		 */
+		RestClient client = new RestClient(restConfig, new SimpleCredentialsProvider(username, password));
+		URI uri = client.buildUri(pathToAuthenticateAgainst, "");
+		try {
+			client.getRestOperations().headForHeaders(uri);
+		} catch (HttpClientErrorException ex) {
+			if (HttpStatus.NOT_FOUND.equals(ex.getStatusCode())) {
+				// Authenticated, but the path wasn't found - that's okay, we just needed to verify authentication
+			} else if (HttpStatus.UNAUTHORIZED.equals(ex.getStatusCode())) {
+				throw new BadCredentialsException("Invalid credentials");
+			} else {
+				throw ex;
+			}
+		}
 
-        return restTemplate;
-    }
+		return buildAuthenticationToReturn(token);
+	}
+
+	/**
+	 * See the comments on MarkLogicUsernamePasswordAuthentication to understand why an instance of that class is
+	 * returned.
+	 *
+	 * @param token
+	 * @return
+	 */
+	protected Authentication buildAuthenticationToReturn(UsernamePasswordAuthenticationToken token) {
+		return new MarkLogicUsernamePasswordAuthentication(token.getPrincipal(), token.getCredentials(),
+			token.getAuthorities());
+	}
+
+	public void setPathToAuthenticateAgainst(String pathToAuthenticateAgainst) {
+		this.pathToAuthenticateAgainst = pathToAuthenticateAgainst;
+	}
 }
 
 /**
@@ -151,24 +97,25 @@ public class MarkLogicAuthenticationManager implements AuthenticationProvider, A
  */
 class SimpleCredentialsProvider implements CredentialsProvider {
 
-    private String username;
-    private String password;
+	private String username;
+	private String password;
 
-    public SimpleCredentialsProvider(String username, String password) {
-        this.username = username;
-        this.password = password;
-    }
+	public SimpleCredentialsProvider(String username, String password) {
+		this.username = username;
+		this.password = password;
+	}
 
-    @Override
-    public void setCredentials(AuthScope authscope, Credentials credentials) {
-    }
+	@Override
+	public void setCredentials(AuthScope authscope, Credentials credentials) {
+	}
 
-    @Override
-    public Credentials getCredentials(AuthScope authscope) {
-        return new UsernamePasswordCredentials(username, password);
-    }
+	@Override
+	public Credentials getCredentials(AuthScope authscope) {
+		return new UsernamePasswordCredentials(username, password);
+	}
 
-    @Override
-    public void clear() {
-    }
+	@Override
+	public void clear() {
+	}
+
 }

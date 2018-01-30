@@ -5,30 +5,31 @@ import java.net.URI;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
+import org.apache.http.HttpHost;
+import org.apache.http.client.AuthCache;
 import org.apache.http.client.CredentialsProvider;
 import org.apache.http.client.HttpClient;
+import org.apache.http.client.protocol.HttpClientContext;
+import org.apache.http.impl.auth.DigestScheme;
+import org.apache.http.impl.client.BasicAuthCache;
 import org.apache.http.impl.client.HttpClientBuilder;
+import org.apache.http.protocol.BasicHttpContext;
+import org.apache.http.protocol.HttpContext;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.client.HttpComponentsClientHttpRequestFactory;
-import org.springframework.security.authentication.CredentialsExpiredException;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.web.authentication.session.SessionAuthenticationException;
 import org.springframework.web.client.RequestCallback;
 import org.springframework.web.client.ResponseExtractor;
 import org.springframework.web.client.RestOperations;
 import org.springframework.web.client.RestTemplate;
 
+import com.marklogic.spring.http.AuthenticationHeader;
 import com.marklogic.spring.http.RestClient;
 import com.marklogic.spring.http.RestConfig;
-import com.marklogic.spring.security.authentication.MarkLogicUsernamePasswordAuthentication;
 
 /**
  * Simple proxy class that uses Spring's RestOperations to proxy servlet requests to MarkLogic.
  */
 public class HttpProxy extends RestClient {
-    public static final String RESTTEMPLATE_KEY = "com.marklogic.spring.http.proxy.RestTemplate";
-
     public HttpProxy(RestConfig restConfig, CredentialsProvider provider) {
         super(restConfig, provider);
     }
@@ -37,11 +38,18 @@ public class HttpProxy extends RestClient {
         super(restConfig, restOperations);
     }
 
-    protected RestTemplate newRestTemplate(CredentialsProvider provider) {
-        HttpClient client = HttpClientBuilder.create().setDefaultCredentialsProvider(provider).build();
-        return new RestTemplate(new HttpComponentsClientHttpRequestFactory(client));
-    }
-
+    @Override
+	protected RestTemplate newRestTemplate(CredentialsProvider provider) {
+    	AuthenticationHeader challenge = AuthenticationHeader.getOption(getRestConfig());
+    	RestTemplate result = null;
+		if ("digest".equalsIgnoreCase(challenge.getType()) && getRestConfig().getCacheDigest()) {
+			result = prepareDigestTemplate(provider, challenge.getRealm());
+		} else {
+			result = super.newRestTemplate(provider);
+		}
+		return result;
+	}
+    
     /**
      * Proxy a request without copying any headers.
      * 
@@ -104,23 +112,33 @@ public class HttpProxy extends RestClient {
         return HttpMethod.valueOf(request.getMethod());
     }
     
-    @Override
-    public RestOperations getRestOperations() {
-        // credentials provider....
-        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        if (auth == null) {
-            throw new CredentialsExpiredException("Missing security context.");
-        }
+    protected RestTemplate prepareDigestTemplate(CredentialsProvider provider, String realm) {
+        final HttpClient httpClient =
+                HttpClientBuilder
+                    .create()
+                    .setDefaultCredentialsProvider(provider)
+                    .useSystemProperties()
+                    .build();
+        final HttpHost host = new HttpHost(getRestConfig().getHost(), getRestConfig().getRestPort(), getRestConfig().getScheme());
         
-        if (!(auth instanceof MarkLogicUsernamePasswordAuthentication)) {
-            return super.getRestOperations();
-        }
+        // Create AuthCache instance
+        final AuthCache authCache = new BasicAuthCache();
         
-        MarkLogicUsernamePasswordAuthentication token = (MarkLogicUsernamePasswordAuthentication) auth;
-        RestOperations template = token.getOperations();
-        if (template == null) {
-            throw new SessionAuthenticationException("User not logged in.");
-        }
-        return template;
+        final DigestScheme digestAuth = new DigestScheme();
+        digestAuth.overrideParamter("realm", realm);
+        authCache.put(host, digestAuth);
+        
+        // create a RestTemplate wired with a custom request factory using the above AuthCache with Digest Scheme
+        RestTemplate restTemplate = new RestTemplate(new HttpComponentsClientHttpRequestFactory(httpClient){
+            @Override
+            protected HttpContext createHttpContext(HttpMethod httpMethod, URI uri) {
+                // Add AuthCache to the execution context
+                BasicHttpContext localcontext = new BasicHttpContext();
+                localcontext.setAttribute(HttpClientContext.AUTH_CACHE, authCache);
+                return localcontext;
+            }
+        });
+
+        return restTemplate;
     }
 }
