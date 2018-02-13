@@ -5,9 +5,15 @@ import java.net.URI;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
+import org.apache.http.HttpHost;
+import org.apache.http.client.AuthCache;
 import org.apache.http.client.CredentialsProvider;
 import org.apache.http.client.HttpClient;
-import org.apache.http.impl.client.HttpClientBuilder;
+import org.apache.http.client.protocol.HttpClientContext;
+import org.apache.http.impl.auth.DigestScheme;
+import org.apache.http.impl.client.BasicAuthCache;
+import org.apache.http.protocol.BasicHttpContext;
+import org.apache.http.protocol.HttpContext;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.client.HttpComponentsClientHttpRequestFactory;
 import org.springframework.web.client.RequestCallback;
@@ -15,15 +21,18 @@ import org.springframework.web.client.ResponseExtractor;
 import org.springframework.web.client.RestOperations;
 import org.springframework.web.client.RestTemplate;
 
+import com.marklogic.spring.http.HttpSampler;
 import com.marklogic.spring.http.RestClient;
 import com.marklogic.spring.http.RestConfig;
+import com.marklogic.spring.http.headers.HttpSamplerImpl;
+import com.marklogic.spring.http.headers.WwwAuthenticateHeader;
 
 /**
  * Simple proxy class that uses Spring's RestOperations to proxy servlet requests to MarkLogic.
  */
 public class HttpProxy extends RestClient {
 
-    public HttpProxy(RestConfig restConfig, CredentialsProvider provider) {
+	public HttpProxy(RestConfig restConfig, CredentialsProvider provider) {
         super(restConfig, provider);
     }
 
@@ -31,11 +40,18 @@ public class HttpProxy extends RestClient {
         super(restConfig, restOperations);
     }
 
+    @Override
     protected RestTemplate newRestTemplate(CredentialsProvider provider) {
-        HttpClient client = HttpClientBuilder.create().setDefaultCredentialsProvider(provider).build();
-        return new RestTemplate(new HttpComponentsClientHttpRequestFactory(client));
+        HttpSampler sampler = new HttpSamplerImpl();
+        sampler.extractSample(getRestConfig());
+        WwwAuthenticateHeader header = sampler.getHeader(WwwAuthenticateHeader.class);
+        
+        if (!"digest".equalsIgnoreCase(header.getValue()) || !getRestConfig().isDigestCachingEnabled()) {
+            return super.newRestTemplate(provider);
+        }
+        return prepareDigestTemplate(provider, header.getRealm());
     }
-
+    
     /**
      * Proxy a request without copying any headers.
      * 
@@ -96,5 +112,30 @@ public class HttpProxy extends RestClient {
 
     protected HttpMethod determineMethod(HttpServletRequest request) {
         return HttpMethod.valueOf(request.getMethod());
+    }
+    
+    protected RestTemplate prepareDigestTemplate(CredentialsProvider provider, String realm) {
+        final HttpClient httpClient = newHttpClient(provider);
+        final HttpHost host = new HttpHost(getRestConfig().getHost(), getRestConfig().getRestPort(), getRestConfig().getScheme());
+        
+        // Create AuthCache instance
+        final AuthCache authCache = new BasicAuthCache();
+        
+        final DigestScheme digestAuth = new DigestScheme();
+        digestAuth.overrideParamter("realm", realm);
+        authCache.put(host, digestAuth);
+        
+        // create a RestTemplate wired with a custom request factory using the above AuthCache with Digest Scheme
+        RestTemplate restTemplate = new RestTemplate(new HttpComponentsClientHttpRequestFactory(httpClient){
+            @Override
+            protected HttpContext createHttpContext(HttpMethod httpMethod, URI uri) {
+                // Add AuthCache to the execution context
+                BasicHttpContext localcontext = new BasicHttpContext();
+                localcontext.setAttribute(HttpClientContext.AUTH_CACHE, authCache);
+                return localcontext;
+            }
+        });
+
+        return restTemplate;
     }
 }

@@ -17,6 +17,9 @@ public class SimpleRestConfig implements RestConfig {
     private Integer restPort;
 
     private String scheme = "http";
+    
+    @Value("${mlCacheDigest:true}")
+    private Boolean digestCachingEnabled;
 
     public SimpleRestConfig() {
 
@@ -49,6 +52,14 @@ public class SimpleRestConfig implements RestConfig {
 
     public void setScheme(String scheme) {
         this.scheme = scheme;
+    }
+
+    public Boolean isDigestCachingEnabled() {
+        return digestCachingEnabled;
+    }
+
+    public void setDigestCachingEnabled(Boolean cacheDigest) {
+        this.digestCachingEnabled = cacheDigest;
     }
 
 }

@@ -61,7 +61,7 @@ public class MarkLogicAuthenticationManager implements AuthenticationProvider, A
 		RestClient client = new RestClient(restConfig, new SimpleCredentialsProvider(username, password));
 		URI uri = client.buildUri(pathToAuthenticateAgainst, "");
 		try {
-			client.getRestOperations().getForEntity(uri, String.class);
+			client.getRestOperations().headForHeaders(uri);
 		} catch (HttpClientErrorException ex) {
 			if (HttpStatus.NOT_FOUND.equals(ex.getStatusCode())) {
 				// Authenticated, but the path wasn't found - that's okay, we just needed to verify authentication
