@@ -12,7 +12,6 @@ import org.apache.http.client.HttpClient;
 import org.apache.http.client.protocol.HttpClientContext;
 import org.apache.http.impl.auth.DigestScheme;
 import org.apache.http.impl.client.BasicAuthCache;
-import org.apache.http.impl.client.HttpClientBuilder;
 import org.apache.http.protocol.BasicHttpContext;
 import org.apache.http.protocol.HttpContext;
 import org.springframework.http.HttpMethod;
@@ -22,9 +21,11 @@ import org.springframework.web.client.ResponseExtractor;
 import org.springframework.web.client.RestOperations;
 import org.springframework.web.client.RestTemplate;
 
-import com.marklogic.spring.http.AuthenticationHeader;
+import com.marklogic.spring.http.HttpSampler;
 import com.marklogic.spring.http.RestClient;
 import com.marklogic.spring.http.RestConfig;
+import com.marklogic.spring.http.headers.HttpSamplerImpl;
+import com.marklogic.spring.http.headers.WwwAuthenticateHeader;
 
 /**
  * Simple proxy class that uses Spring's RestOperations to proxy servlet requests to MarkLogic.
@@ -41,14 +42,14 @@ public class HttpProxy extends RestClient {
 
     @Override
     protected RestTemplate newRestTemplate(CredentialsProvider provider) {
-        AuthenticationHeader challenge = AuthenticationHeader.getOption(getRestConfig());
-        RestTemplate result = null;
-        if ("digest".equalsIgnoreCase(challenge.getType()) && getRestConfig().getCacheDigest()) {
-            result = prepareDigestTemplate(provider, challenge.getRealm());
-        } else {
-            result = super.newRestTemplate(provider);
+        HttpSampler sampler = new HttpSamplerImpl();
+        sampler.extractSample(getRestConfig());
+        WwwAuthenticateHeader header = sampler.getHeader(WwwAuthenticateHeader.class);
+        
+        if (!"digest".equalsIgnoreCase(header.getValue()) || !getRestConfig().isDigestCachingEnabled()) {
+            return super.newRestTemplate(provider);
         }
-        return result;
+        return prepareDigestTemplate(provider, header.getRealm());
     }
     
     /**
@@ -114,12 +115,7 @@ public class HttpProxy extends RestClient {
     }
     
     protected RestTemplate prepareDigestTemplate(CredentialsProvider provider, String realm) {
-        final HttpClient httpClient =
-                HttpClientBuilder
-                    .create()
-                    .setDefaultCredentialsProvider(provider)
-                    .useSystemProperties()
-                    .build();
+        final HttpClient httpClient = newHttpClient(provider);
         final HttpHost host = new HttpHost(getRestConfig().getHost(), getRestConfig().getRestPort(), getRestConfig().getScheme());
         
         // Create AuthCache instance

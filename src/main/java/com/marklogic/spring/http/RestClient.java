@@ -63,9 +63,12 @@ public class RestClient {
         }
     }
 
+    protected HttpClient newHttpClient(CredentialsProvider provider) {
+    	return HttpClientBuilder.create().setDefaultCredentialsProvider(provider).useSystemProperties().build();
+    }
+    
     protected RestTemplate newRestTemplate(CredentialsProvider provider) {
-        HttpClient client = HttpClientBuilder.create().setDefaultCredentialsProvider(provider).build();
-        return new RestTemplate(new HttpComponentsClientHttpRequestFactory(client));
+        return new RestTemplate(new HttpComponentsClientHttpRequestFactory(newHttpClient(provider)));
     }
 
     public RestOperations getRestOperations() {

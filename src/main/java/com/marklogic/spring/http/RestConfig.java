@@ -8,5 +8,5 @@ public interface RestConfig {
 
     public String getScheme();
 
-    public Boolean getCacheDigest();
+    public Boolean isDigestCachingEnabled();
 }
