@@ -1,57 +1,66 @@
 plugins {
-  id "maven-publish"
-  id "java"
-  id "eclipse"
-  id "com.jfrog.bintray" version "1.5"
-  id "com.github.jk1.dependency-license-report" version "0.3.11"
+	id "maven-publish"
+	id "java"
+	id "eclipse"
+	id "com.jfrog.bintray" version "1.5"
+	id "com.github.jk1.dependency-license-report" version "0.3.11"
 }
 
-sourceCompatibility = 1.7
-targetCompatibility = 1.7
+sourceCompatibility = 1.8
+targetCompatibility = 1.8
 
 repositories {
-  jcenter()
+	jcenter()
 }
 
 dependencies {
-  compile "javax.servlet:javax.servlet-api:3.1.0"
-  compile "org.apache.httpcomponents:httpclient:4.5.2"
-  compile "org.slf4j:jcl-over-slf4j:1.7.21"
-  compile "org.springframework.security:spring-security-web:4.0.4.RELEASE"
-  compile "org.springframework:spring-web:4.2.7.RELEASE"
+	compile "javax.servlet:javax.servlet-api:3.1.0"
+	compile "org.apache.httpcomponents:httpclient:4.5.2"
+	compile "org.slf4j:jcl-over-slf4j:1.7.21"
+	compile "org.springframework.security:spring-security-web:4.0.4.RELEASE"
+	compile "org.springframework:spring-web:4.3.14.RELEASE"
+
+	testCompile "com.marklogic:ml-app-deployer:3.5.0"
+	testCompile "junit:junit:4+"
+	testCompile "org.springframework:spring-test:4.3.14.RELEASE"
+
+	// Forcing Spring to use logback instead of commons-logging
+	testRuntime "ch.qos.logback:logback-classic:1.1.8"
+	testRuntime group: "org.slf4j", name: "jcl-over-slf4j", version: "1.7.22"
+	testRuntime group: "org.slf4j", name: "slf4j-api", version: "1.7.22"
 }
 
 task sourcesJar(type: Jar, dependsOn: classes) {
-  classifier 'sources' 
-  from sourceSets.main.allJava
+	classifier 'sources'
+	from sourceSets.main.allJava
 }
 
 publishing {
-  publications {
-    mainJava(MavenPublication) {
-      from components.java
-    }
-    sourcesJava(MavenPublication) {
-      from components.java
-      artifact sourcesJar
-    }
-  }
+	publications {
+		mainJava(MavenPublication) {
+			from components.java
+		}
+		sourcesJava(MavenPublication) {
+			from components.java
+			artifact sourcesJar
+		}
+	}
 }
- 
+
 if (project.hasProperty("myBintrayUser")) {
-  bintray {
-    user = myBintrayUser
-    key = myBintrayKey
-    publications = ['mainJava', 'sourcesJava']
-    pkg {
-      repo = 'maven'
-      name = project.name
-      licenses = ['Apache-2.0']
-      vcsUrl = 'https://github.com/rjrudin/' + project.name + '.git'
-      version {
-        name = "1.0"
-        released = new Date()
-      }
-    }
-  }
+	bintray {
+		user = myBintrayUser
+		key = myBintrayKey
+		publications = ['mainJava', 'sourcesJava']
+		pkg {
+			repo = 'maven'
+			name = project.name
+			licenses = ['Apache-2.0']
+			vcsUrl = 'https://github.com/rjrudin/' + project.name + '.git'
+			version {
+				name = "1.0"
+				released = new Date()
+			}
+		}
+	}
 }
